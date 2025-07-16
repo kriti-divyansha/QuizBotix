@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 const About = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-900 via-white to-purple-700 text-white p-8 text-center animate-fade-in">
+    <div className="min-h-screen bg-gradient-to-br from-black via-purple-300 to-indigo-800 text-white p-8 text-center animate-fade-in">
       <h1 className="text-3xl font-bold text-black mb-4">📞 About & Contact</h1>
       <p className="text-lg mb-2">Hi! I'm Kriti, the creator of QuizBotix ✨</p>
       <p className="text-md text-gray-900">Designed to make learning fun — with a React UI, Flask server, and AI-generated questions.</p>

@@ -1,16 +1,17 @@
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room # Added join_room, leave_room
 import requests
 import os
 from dotenv import load_dotenv
 import json
 import uuid
+import datetime
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# --- CRITICAL: Ensure FLASK_SECRET_KEY is loaded ONCE and is PERSISTENT ---
 _secret_key = os.getenv("FLASK_SECRET_KEY")
 
 if not _secret_key:
@@ -18,16 +19,88 @@ if not _secret_key:
     print("!! ERROR: FLASK_SECRET_KEY environment variable NOT SET!         !!")
     print("!! Sessions will NOT WORK and will be INSECURE.                  !!")
     print("!! Please set FLASK_SECRET_KEY in your .env file                 !!")
-    print("!! (e.g., FLASK_SECRET_KEY='a_very_long_and_random_string')       !!")
+    print("!! (e.g., FLASK_SECRET_KEY='a_very_long_and_random_string')      !!")
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     app.secret_key = 'a_fallback_dev_key_if_not_set_but_avoid_this_in_prod'
 else:
     app.secret_key = _secret_key
 
-# --- ADD THIS DEBUG PRINT ---
 print(f"🔑 Flask app.secret_key set to: '{app.secret_key[:5]}...' (truncated for security, ensure it's long and from .env)")
-# --- END DEBUG PRINT ---
 
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+
+# --- Live Leaderboard Data Store (In-memory for simplicity) ---
+# In a real application, this would be a database.
+# Using a dictionary to map player_id to their details for easy updates
+global_leaderboard_players = {} # {player_id: {"username": ..., "score": ..., "total_questions": ..., "timestamp": ..., "topic": ...}}
+
+# Function to get sorted leaderboard for emission
+def get_sorted_leaderboard_for_frontend():
+    # Convert dict values to a list and simplify for frontend
+    players_list = []
+    for player_id, data in global_leaderboard_players.items():
+        players_list.append({
+            "id": player_id, # Frontend expects 'id'
+            "username": data["username"],
+            "score": data["score"],
+            "total_questions": data.get("total_questions", 0), # Include total_questions
+            "topic": data.get("topic", "General Knowledge") # Include topic
+        })
+    # Sort by score in descending order
+    players_list.sort(key=lambda x: x['score'], reverse=True)
+    return players_list[:10] # Keep only top 10 for display
+
+# --- SocketIO Event Handlers ---
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected:', request.sid)
+    # When a new client connects, send them the current leaderboard state
+    emit('updateLeaderboard', get_sorted_leaderboard_for_frontend())
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected:', request.sid)
+    # Optional: Remove player from leaderboard if disconnected, though typically not done for leaderboards
+    # unless you want to track active players. For scores, they persist.
+
+@socketio.on('joinRoom')
+def handle_join_room(data):
+    # For a global leaderboard, the room concept might be less critical.
+    # However, if you plan to extend to quiz-specific leaderboards, keep this.
+    room_id = data.get('roomId')
+    username = data.get('username')
+    join_room(room_id)
+    print(f"Client {request.sid} ({username}) joined room: {room_id}")
+    # Immediately send the current leaderboard to the newly joined client
+    emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room=room_id)
+
+@socketio.on('updateScore')
+def handle_update_score(data):
+    # This handler is mainly for your frontend's "Simulate Score" button.
+    # In a real app, the score update for the leaderboard would come from /submit-quiz
+    room_id = data.get('roomId', 'quiz123') # Default room_id
+    score_change = data.get('score', 0)
+    
+    # You'll need a way to identify the player uniquely. For simulation, use sid
+    player_id = request.sid
+    username = data.get('username', f"Player_{request.sid[:4]}") # Use provided username or generate one
+
+    if player_id not in global_leaderboard_players:
+        global_leaderboard_players[player_id] = {
+            "username": username,
+            "score": 0,
+            "total_questions": 0, # Not relevant for simulated score
+            "topic": "Simulated"
+        }
+    
+    global_leaderboard_players[player_id]["score"] += score_change
+    print(f"Simulated score update for {username} (ID: {player_id}): new score {global_leaderboard_players[player_id]['score']}")
+
+    # Emit the updated leaderboard to all clients in the room (or globally if no room)
+    socketio.emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room=room_id)
+
+
+# --- Existing Groq API and Quiz Generation Logic ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -49,16 +122,16 @@ def generate_quiz():
         "Respond strictly in a JSON array format. Each object in the array should have 'question' (string), 'options' (array of strings), and 'answer' (string, the correct option letter). "
         "Example JSON structure:\n"
         "[\n"
-        "  {\n"
-        "    \"question\": \"What is the capital of France?\",\n"
-        "    \"options\": [\"A. Berlin\", \"B. Paris\", \"C. Rome\", \"D. Madrid\"],\n"
-        "    \"answer\": \"B\"\n"
-        "  },\n"
-        "  {\n"
-        "    \"question\": \"Which planet is known as the Red Planet?\",\n"
-        "    \"options\": [\"A. Earth\", \"B. Mars\", \"C. Jupiter\", \"D. Venus\"],\n"
-        "    \"answer\": \"B\"\n"
-        "  }\n"
+        "   {\n"
+        "     \"question\": \"What is the capital of France?\",\n"
+        "     \"options\": [\"A. Berlin\", \"B. Paris\", \"C. Rome\", \"D. Madrid\"],\n"
+        "     \"answer\": \"B\"\n"
+        "   },\n"
+        "   {\n"
+        "     \"question\": \"Which planet is known as the Red Planet?\",\n"
+        "     \"options\": [\"A. Earth\", \"B. Mars\", \"C. Jupiter\", \"D. Venus\"],\n"
+        "     \"answer\": \"B\"\n"
+        "   }\n"
         "]\n"
         "Note: Ensure the response is pure JSON, without any preceding or trailing text like markdown code blocks (```json) or conversational phrases."
     )
@@ -95,13 +168,15 @@ def generate_quiz():
             return jsonify({"error": "AI generated response in unexpected format"}), 500
 
         quiz_id = str(uuid.uuid4())
-        session[quiz_id] = questions # Store the full quiz data, including answers
+        session[quiz_id] = {"questions": questions, "topic": topic}
+        print(f"📝 Quiz stored in session with ID: {quiz_id} and topic: {topic}")
+
 
         questions_for_frontend = []
         for q in questions:
             q_copy = q.copy()
             if 'answer' in q_copy:
-                del q_copy['answer'] # Remove the answer before sending to frontend
+                del q_copy['answer']
             questions_for_frontend.append(q_copy)
 
         response_data_to_send = {"quiz_id": quiz_id, "questions": questions_for_frontend}
@@ -139,17 +214,21 @@ def submit_quiz():
     data = request.get_json()
     quiz_id = data.get('quiz_id')
     user_answers = data.get('user_answers', [])
+    username = data.get('username', 'Anonymous') # Assume frontend sends a username
 
     if not quiz_id:
         print("❌ Submit error: Quiz ID missing in frontend payload.")
         return jsonify({"error": "Quiz ID missing"}), 400
     
-    stored_quiz = session.get(quiz_id)
-    print(f"🔍 Checking session for quiz_id '{quiz_id}': Found = {stored_quiz is not None}")
+    stored_quiz_data = session.get(quiz_id)
+    print(f"🔍 Checking session for quiz_id '{quiz_id}': Found = {stored_quiz_data is not None}")
 
-    if not stored_quiz:
-        print("❌ Error: Quiz not found in session for given ID. Session might have reset.")
+    if not stored_quiz_data or "questions" not in stored_quiz_data:
+        print("❌ Error: Quiz not found in session for given ID or malformed. Session might have reset.")
         return jsonify({"error": "Quiz not found or expired. Please generate a new quiz."}), 404
+
+    stored_questions = stored_quiz_data["questions"]
+    quiz_topic = stored_quiz_data.get("topic", "General Knowledge")
 
     score = 0
     results = []
@@ -162,8 +241,8 @@ def submit_quiz():
             results.append({"error": "Invalid user answer format", "user_input": user_ans_obj})
             continue
 
-        if 0 <= q_index < len(stored_quiz):
-            correct_question = stored_quiz[q_index]
+        if 0 <= q_index < len(stored_questions):
+            correct_question = stored_questions[q_index]
             correct_answer_letter = correct_question['answer']
 
             is_correct = (selected_option.upper() == correct_answer_letter.upper())
@@ -181,8 +260,30 @@ def submit_quiz():
         else:
             results.append({"error": "Question index out of bounds", "question_index": q_index})
             
-    print(f"✅ Quiz submitted successfully for quiz_id '{quiz_id}'. Score: {score}/{len(stored_quiz)}")
-    return jsonify({"score": score, "total_questions": len(stored_quiz), "results": results})
+    total_questions = len(stored_questions)
+    print(f"✅ Quiz submitted successfully for quiz_id '{quiz_id}'. Score: {score}/{total_questions} by {username}")
+
+    # --- Update global leaderboard and emit ---
+    player_id = request.sid # Use socket ID as unique player ID for this session
+    global_leaderboard_players[player_id] = {
+        "username": username,
+        "score": score,
+        "total_questions": total_questions,
+        "topic": quiz_topic,
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+
+    # Emit the updated leaderboard to all clients (or a specific room if you decide to use rooms)
+    # For now, we'll emit to a common room 'quiz123' if the frontend is always joining it.
+    socketio.emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room='quiz123')
+
+
+    return jsonify({"score": score, "total_questions": total_questions, "results": results})
+
+@app.route('/leaderboard', methods=['GET'])
+def get_leaderboard():
+    # Provide the globally sorted leaderboard for initial fetch
+    return jsonify(get_sorted_leaderboard_for_frontend())
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)

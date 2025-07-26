@@ -1,0 +1,24 @@
+@import 'tailwindcss'; 
+
+html, body, #root {
+  height: 100%;
+  margin: 0;  
+  padding: 0; 
+  background-color: #000;
+  color: #fff;
+}
+
+body {
+  background-image: linear-gradient(to bottom right, #000000, #8B5CF6, #4C1D95);
+  background-attachment: fixed;
+}
+
+/*
+ * 3. Ensure the #root element (where your React app mounts)
+ * also fills at least the viewport height and uses flex for internal layout.
+ */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column; /* Stacks content vertically */
+}

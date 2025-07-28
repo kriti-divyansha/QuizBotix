@@ -1,4 +1,5 @@
 **QuizBotix: Interactive Quiz Platform with AI Chat Assistant**
+
 QuizBotix: Interactive Quiz Platform with AI Chat Assistant
 QuizBotix is a dynamic web application designed to make learning engaging and interactive through customizable quizzes. Beyond just testing knowledge, QuizBotix now integrates a powerful AI-powered chat assistant (QuizBot) to provide real-time support and enhance the learning experience. This project showcases a robust, full-stack architecture with a focus on modularity, responsive design, and secure API integration.
 

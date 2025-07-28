@@ -1,12 +1,40 @@
-# React + Vite
+QuizBotix: Interactive Quiz Platform with AI Chat Assistant
+QuizBotix is a dynamic web application designed to make learning engaging and interactive through customizable quizzes. Beyond just testing knowledge, QuizBotix now integrates a powerful AI-powered chat assistant (QuizBot) to provide real-time support and enhance the learning experience. This project showcases a robust, full-stack architecture with a focus on modularity, responsive design, and secure API integration.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+✨ Key Features
+Interactive Quizzes: Engage with a variety of quiz categories and question types.
 
-Currently, two official plugins are available:
+Real-time Feedback: Receive immediate results and explanations for correct/incorrect answers.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Quiz Session Management: Persistent sessions to track user progress and scores.
 
-## Expanding the ESLint configuration
+Integrated AI Chat Assistant (QuizBot):
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Leverages the Groq API for fast, relevant, and conversational AI responses.
+
+Provides assistance, explanations, or additional information related to quiz topics.
+
+Seamlessly integrated within the application, allowing users to switch effortlessly between the quiz interface and the AI chat assistant.
+
+User-Friendly Interface: Intuitive and responsive design for an optimal experience across devices.
+
+Secure API Handling: Utilizes environment variables (.env) for sensitive information, ensuring API keys remain private and out of version control.
+
+Modular Architecture: Clearly separated Frontend and Backend directories for improved maintainability and scalability.
+
+🛠️ Technologies Used
+Frontend:
+
+React: For building the interactive user interface.
+
+Tailwind CSS: For rapid and responsive UI styling.
+
+Backend:
+
+Python: The core language for the backend logic.
+
+Flask: A lightweight web framework for the API.
+
+Groq API: For powering the AI Chat Assistant.
+
+dotenv: For secure management of environment variables.

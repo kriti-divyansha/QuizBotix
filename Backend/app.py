@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, session
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit, join_room, leave_room # Added join_room, leave_room
+from flask_cors import CORS 
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import requests
 import os
 from dotenv import load_dotenv
@@ -10,7 +10,11 @@ import datetime
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+
+# --- CRITICAL CORS CONFIGURATION ---
+# This line ensures CORS headers are added to all routes by default,
+# and allows credentials (like cookies) to be sent cross-origin.
+CORS(app, supports_credentials=True)
 
 _secret_key = os.getenv("FLASK_SECRET_KEY")
 
@@ -25,113 +29,118 @@ if not _secret_key:
 else:
     app.secret_key = _secret_key
 
+# --- CRITICAL SESSION COOKIE CONFIGURATION FOR LOCAL HTTP ---
+# This ensures that Flask's session cookie is not marked as 'Secure'
+# when running on http://localhost, allowing browsers to send it.
+app.config['SESSION_COOKIE_SECURE'] = False
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Good practice for security
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Recommended for modern browsers
+
 print(f"🔑 Flask app.secret_key set to: '{app.secret_key[:5]}...' (truncated for security, ensure it's long and from .env)")
 
+# SocketIO CORS configuration
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
-# --- Live Leaderboard Data Store (In-memory for simplicity) ---
-# In a real application, this would be a database.
-# Using a dictionary to map player_id to their details for easy updates
-global_leaderboard_players = {} # {player_id: {"username": ..., "score": ..., "total_questions": ..., "timestamp": ..., "topic": ...}}
 
-# Function to get sorted leaderboard for emission
+global_leaderboard_players = {}
+
 def get_sorted_leaderboard_for_frontend():
-    # Convert dict values to a list and simplify for frontend
     players_list = []
     for player_id, data in global_leaderboard_players.items():
         players_list.append({
-            "id": player_id, # Frontend expects 'id'
+            "id": player_id,
             "username": data["username"],
             "score": data["score"],
-            "total_questions": data.get("total_questions", 0), # Include total_questions
-            "topic": data.get("topic", "General Knowledge") # Include topic
+            "total_questions": data.get("total_questions", 0),
+            "topic": data.get("topic", "General Knowledge")
         })
-    # Sort by score in descending order
     players_list.sort(key=lambda x: x['score'], reverse=True)
-    return players_list[:10] # Keep only top 10 for display
+    return players_list[:10]
 
-# --- SocketIO Event Handlers ---
 @socketio.on('connect')
 def handle_connect():
     print('Client connected:', request.sid)
-    # When a new client connects, send them the current leaderboard state
     emit('updateLeaderboard', get_sorted_leaderboard_for_frontend())
 
 @socketio.on('disconnect')
 def handle_disconnect():
     print('Client disconnected:', request.sid)
-    # Optional: Remove player from leaderboard if disconnected, though typically not done for leaderboards
-    # unless you want to track active players. For scores, they persist.
 
 @socketio.on('joinRoom')
 def handle_join_room(data):
-    # For a global leaderboard, the room concept might be less critical.
-    # However, if you plan to extend to quiz-specific leaderboards, keep this.
     room_id = data.get('roomId')
     username = data.get('username')
     join_room(room_id)
     print(f"Client {request.sid} ({username}) joined room: {room_id}")
-    # Immediately send the current leaderboard to the newly joined client
     emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room=room_id)
 
 @socketio.on('updateScore')
 def handle_update_score(data):
-    # This handler is mainly for your frontend's "Simulate Score" button.
-    # In a real app, the score update for the leaderboard would come from /submit-quiz
-    room_id = data.get('roomId', 'quiz123') # Default room_id
+    room_id = data.get('roomId', 'quiz123')
     score_change = data.get('score', 0)
     
-    # You'll need a way to identify the player uniquely. For simulation, use sid
     player_id = request.sid
-    username = data.get('username', f"Player_{request.sid[:4]}") # Use provided username or generate one
+    username = data.get('username', f"Player_{request.sid[:4]}")
 
     if player_id not in global_leaderboard_players:
         global_leaderboard_players[player_id] = {
             "username": username,
             "score": 0,
-            "total_questions": 0, # Not relevant for simulated score
+            "total_questions": 0,
             "topic": "Simulated"
         }
     
     global_leaderboard_players[player_id]["score"] += score_change
     print(f"Simulated score update for {username} (ID: {player_id}): new score {global_leaderboard_players[player_id]['score']}")
 
-    # Emit the updated leaderboard to all clients in the room (or globally if no room)
     socketio.emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room=room_id)
 
 
-# --- Existing Groq API and Quiz Generation Logic ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 if not GROQ_API_KEY:
     print("❌ ERROR: GROQ_API_KEY environment variable not set. Please set it in your .env file or environment.")
-    exit(1)
-
+    # In a production app, you might raise an exception or exit more gracefully.
+    # For now, let's allow it to proceed for development but log a clear error.
+    pass
 
 @app.route('/generate-quiz', methods=['POST'])
 def generate_quiz():
     data = request.get_json()
     topic = data.get('topic', 'General Knowledge')
+    num_questions = data.get('count', 5)
+    difficulty = data.get('difficulty', 'easy')
 
-    print(f"📩 Topic received from frontend: '{topic}'")
+    print(f"📩 Topic received: '{topic}', Questions: {num_questions}, Difficulty: {difficulty}")
+
+    difficulty_hint = ""
+    if difficulty == "easy":
+        difficulty_hint = "Make them relatively straightforward and widely known."
+    elif difficulty == "medium":
+        difficulty_hint = "Include some common and some slightly less common facts."
+    elif difficulty == "hard":
+        difficulty_hint = "Challenge the user with more obscure or detailed questions."
 
     prompt = (
-        f"Generate 5 multiple choice quiz questions on the topic '{topic}'. "
+        f"Generate {num_questions} multiple choice quiz questions on the topic '{topic}'. "
+        f"{difficulty_hint} "
         "Each question should have 4 options (A, B, C, D) and clearly specify the correct answer using the option letter (e.g., 'A', 'B'). "
-        "Respond strictly in a JSON array format. Each object in the array should have 'question' (string), 'options' (array of strings), and 'answer' (string, the correct option letter). "
+        "The options should be formatted with the letter prefix (e.g., 'A. Option Text'). "
+        "Respond strictly in a JSON array format. Each object in the array should have 'question' (string), "
+        "'options' (an array of strings like ['A. Option1', 'B. Option2']), and 'answer' (string, the correct option letter). "
         "Example JSON structure:\n"
         "[\n"
-        "   {\n"
-        "     \"question\": \"What is the capital of France?\",\n"
-        "     \"options\": [\"A. Berlin\", \"B. Paris\", \"C. Rome\", \"D. Madrid\"],\n"
-        "     \"answer\": \"B\"\n"
-        "   },\n"
-        "   {\n"
-        "     \"question\": \"Which planet is known as the Red Planet?\",\n"
-        "     \"options\": [\"A. Earth\", \"B. Mars\", \"C. Jupiter\", \"D. Venus\"],\n"
-        "     \"answer\": \"B\"\n"
-        "   }\n"
+        "  {\n"
+        "    \"question\": \"What is the capital of France?\",\n"
+        "    \"options\": [\"A. Berlin\", \"B. Paris\", \"C. Rome\", \"D. Madrid\"],\n"
+        "    \"answer\": \"B\"\n"
+        "  },\n"
+        "  {\n"
+        "    \"question\": \"Which planet is known as the Red Planet?\",\n"
+        "    \"options\": [\"A. Earth\", \"B. Mars\", \"C. Jupiter\", \"D. Venus\"],\n"
+        "    \"answer\": \"B\"\n"
+        "  }\n"
         "]\n"
         "Note: Ensure the response is pure JSON, without any preceding or trailing text like markdown code blocks (```json) or conversational phrases."
     )
@@ -149,9 +158,7 @@ def generate_quiz():
     }
 
     try:
-        print("📤 Sending payload to Groq API:")
-        print(json.dumps(payload, indent=2))
-
+        print("📤 Sending payload to Groq API...")
         response = requests.post(GROQ_API_URL, headers=headers, json=payload)
         response.raise_for_status()
 
@@ -161,23 +168,44 @@ def generate_quiz():
         print("🧠 Raw Groq response content (before JSON parsing):")
         print(content)
 
-        questions = json.loads(content)
+        if content.startswith("```json") and content.endswith("```"):
+            content = content[7:-3].strip()
+            print("Cleaned markdown from Groq response.")
+
+        questions_raw = json.loads(content)
         
-        if not isinstance(questions, list) or not all(isinstance(q, dict) and 'question' in q and 'options' in q and 'answer' in q for q in questions):
+        if not isinstance(questions_raw, list) or not all(isinstance(q, dict) and 'question' in q and 'options' in q and 'answer' in q for q in questions_raw):
             print("⚠️ Warning: Groq response was JSON, but didn't match expected quiz structure.")
             return jsonify({"error": "AI generated response in unexpected format"}), 500
 
-        quiz_id = str(uuid.uuid4())
-        session[quiz_id] = {"questions": questions, "topic": topic}
-        print(f"📝 Quiz stored in session with ID: {quiz_id} and topic: {topic}")
-
-
+        full_questions_for_session = []
         questions_for_frontend = []
-        for q in questions:
-            q_copy = q.copy()
-            if 'answer' in q_copy:
-                del q_copy['answer']
-            questions_for_frontend.append(q_copy)
+        
+        for q_raw in questions_raw:
+            options_obj = {}
+            for opt_str in q_raw['options']:
+                if len(opt_str) >= 3 and opt_str[1] == '.' and opt_str[0].isalpha():
+                    letter = opt_str[0].upper()
+                    text = opt_str[3:].strip()
+                    options_obj[letter] = text
+                else:
+                    letter = chr(65 + list(q_raw['options']).index(opt_str))
+                    options_obj[letter] = opt_str.strip()
+
+            full_questions_for_session.append({
+                'question_text': q_raw['question'],
+                'options': options_obj,
+                'correct_option_letter': q_raw['answer'].upper()
+            })
+
+            questions_for_frontend.append({
+                'question_text': q_raw['question'],
+                'options': options_obj
+            })
+
+        quiz_id = str(uuid.uuid4())
+        session[quiz_id] = {"questions": full_questions_for_session, "topic": topic}
+        print(f"📝 Quiz stored in session with ID: {quiz_id} and topic: {topic}")
 
         response_data_to_send = {"quiz_id": quiz_id, "questions": questions_for_frontend}
         print("💡 Flask sending this JSON data to frontend:", json.dumps(response_data_to_send, indent=2))
@@ -209,12 +237,13 @@ def generate_quiz():
         print(f"❌ An unexpected server error occurred: {str(e)}")
         return jsonify({"error": "An unexpected server error occurred"}), 500
 
+
 @app.route('/submit-quiz', methods=['POST'])
 def submit_quiz():
     data = request.get_json()
     quiz_id = data.get('quiz_id')
-    user_answers = data.get('user_answers', [])
-    username = data.get('username', 'Anonymous') # Assume frontend sends a username
+    user_answers_list = data.get('user_answers', [])
+    username = data.get('username', 'Anonymous')
 
     if not quiz_id:
         print("❌ Submit error: Quiz ID missing in frontend payload.")
@@ -231,40 +260,49 @@ def submit_quiz():
     quiz_topic = stored_quiz_data.get("topic", "General Knowledge")
 
     score = 0
-    results = []
+    results_for_frontend = []
 
-    for user_ans_obj in user_answers:
+    for user_ans_obj in user_answers_list:
         q_index = user_ans_obj.get('question_index')
-        selected_option = user_ans_obj.get('selected_option_letter')
+        user_selected_letter = user_ans_obj.get('selected_option_letter')
 
-        if q_index is None or selected_option is None:
-            results.append({"error": "Invalid user answer format", "user_input": user_ans_obj})
+        if q_index is None or user_selected_letter is None:
+            print(f"⚠️ Invalid user answer format received: {user_ans_obj}")
             continue
 
         if 0 <= q_index < len(stored_questions):
-            correct_question = stored_questions[q_index]
-            correct_answer_letter = correct_question['answer']
+            correct_question_data = stored_questions[q_index]
+            correct_answer_letter = correct_question_data['correct_option_letter']
+            
+            all_options_for_q = correct_question_data['options']
 
-            is_correct = (selected_option.upper() == correct_answer_letter.upper())
+            user_selected_text = all_options_for_q.get(user_selected_letter.upper(), f"Option {user_selected_letter} (N/A)")
+            correct_answer_text = all_options_for_q.get(correct_answer_letter.upper(), f"Option {correct_answer_letter} (N/A)")
+
+            is_correct = (user_selected_letter.upper() == correct_answer_letter.upper())
             
             if is_correct:
                 score += 1
             
-            results.append({
+            results_for_frontend.append({
                 "question_index": q_index,
-                "user_selected": selected_option,
-                "correct_answer": correct_answer_letter,
+                "question_text": correct_question_data['question_text'],
+                "options": all_options_for_q,
+                "user_selected_letter": user_selected_letter.upper(),
+                "user_selected_text": user_selected_text,
+                "correct_letter": correct_answer_letter.upper(),
+                "correct_text": correct_answer_text,
                 "is_correct": is_correct,
-                "question_text": correct_question['question']
             })
         else:
-            results.append({"error": "Question index out of bounds", "question_index": q_index})
+            print(f"⚠️ Question index {q_index} out of bounds for quiz {quiz_id}.")
+            results_for_frontend.append({"error": "Question index out of bounds", "question_index": q_index})
             
     total_questions = len(stored_questions)
     print(f"✅ Quiz submitted successfully for quiz_id '{quiz_id}'. Score: {score}/{total_questions} by {username}")
 
-    # --- Update global leaderboard and emit ---
-    player_id = request.sid # Use socket ID as unique player ID for this session
+    player_id = username
+    
     global_leaderboard_players[player_id] = {
         "username": username,
         "score": score,
@@ -273,16 +311,16 @@ def submit_quiz():
         "timestamp": datetime.datetime.now().isoformat()
     }
 
-    # Emit the updated leaderboard to all clients (or a specific room if you decide to use rooms)
-    # For now, we'll emit to a common room 'quiz123' if the frontend is always joining it.
     socketio.emit('updateLeaderboard', get_sorted_leaderboard_for_frontend(), room='quiz123')
 
-
-    return jsonify({"score": score, "total_questions": total_questions, "results": results})
+    return jsonify({
+        "score": score,
+        "total_questions": total_questions,
+        "results": results_for_frontend
+    })
 
 @app.route('/leaderboard', methods=['GET'])
 def get_leaderboard():
-    # Provide the globally sorted leaderboard for initial fetch
     return jsonify(get_sorted_leaderboard_for_frontend())
 
 if __name__ == '__main__':

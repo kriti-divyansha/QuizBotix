@@ -1,4 +1,4 @@
-**QuizBotix: Interactive Quiz Platform with AI Chat Assistant**
+## 🚀 **QuizBotix: AI-Powered Interactive Quiz Platform for Smarter Learning**
 
 🌐 Live Demo  
 👉 [Try QuizBotix Live](https://quiz-botix-hbo7vhwaz-kritis-projects-208ee7c8.vercel.app)

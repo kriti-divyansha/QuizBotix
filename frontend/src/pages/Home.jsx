@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import LoginModal from './login'; // Assuming login.jsx is login.js
-import ProfileSidePanel from './ProfileSidePanel'; // Import the new component
+import LoginModal from './login'; // Assuming login.jsx is login.jsx
+import ProfileSidePanel from './ProfileSidePanel'; 
 
 const Home = () => {
   console.log('Home component rendering...');
@@ -42,11 +42,9 @@ const Home = () => {
         localStorage.removeItem('quizHistory_'); // Clear any corrupted history
       }
     }
-    // Handle navigation state if user was redirected back from QuizPage
     if (location.state && location.state.loggedInUser) {
       const userFromState = location.state.loggedInUser;
       setLoggedInUser(userFromState);
-      // Ensure history is loaded if coming back from quiz page
       const storedHistory = localStorage.getItem(`quizHistory_${userFromState.email}`);
       if (storedHistory) {
         setQuizHistory(JSON.parse(storedHistory));
@@ -177,7 +175,7 @@ const Home = () => {
       )}
 
       {/* Profile Side Panel */}
-      {loggedInUser && ( // Only render if a user is logged in
+      {loggedInUser && 
         <ProfileSidePanel
           isOpen={showSidePanel}
           onClose={() => setShowSidePanel(false)}
@@ -249,8 +247,7 @@ const Home = () => {
             </button>
         </div>
       )}
-
-      {/* Leaderboard Section - REMOVED AS PER PREVIOUS INSTRUCTION */}
+      
     </div>
   );
 };

@@ -1,7 +1,5 @@
 import React from 'react';
 
-// This component is now only responsible for rendering the questions and handling user selections.
-// The submit button has been moved to the parent component (QuizPage.jsx).
 export default function QuizQuestions({ questions, userAnswers, onOptionChange }) {
     return (
         <div className="mt-8 space-y-6">

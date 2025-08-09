@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from 'react';
 
-// and login success/failure are managed by the parent (Home.jsx)
 export default function LoginModal({ onLoginSuccess, onClose }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); // For signup
+  const [confirmPassword, setConfirmPassword] = useState(''); 
   const [error, setError] = useState(null);
   const [isSignUp, setIsSignUp] = useState(false); // To toggle between Login and Sign Up
 
-  // Load user data from localStorage when the modal mounts
   useEffect(() => {
     const storedUser = localStorage.getItem('loggedInUser');
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        // not if we're explicitly in a password-based login flow.
-        // For simplicity, we'll keep it as is, but in a real app, you might not pre-fill if password is involved.
         setName(user.name || '');
         setEmail(user.email || '');
       } catch (e) {
@@ -45,8 +41,6 @@ export default function LoginModal({ onLoginSuccess, onClose }) {
         return;
       }
 
-      // In a real application, you would send this data to your backend for user registration.
-      // For this example, we'll just simulate a successful signup and store it locally.
       const newUser = { name: name.trim(), email: email.trim(), password: password.trim() };
       localStorage.setItem('registeredUsers', JSON.stringify([...(JSON.parse(localStorage.getItem('registeredUsers') || '[]')), newUser]));
       localStorage.setItem('loggedInUser', JSON.stringify({ name: newUser.name, email: newUser.email })); // Log them in immediately after signup
@@ -65,7 +59,7 @@ export default function LoginModal({ onLoginSuccess, onClose }) {
       if (foundUser) {
         const user = { name: foundUser.name, email: foundUser.email };
         localStorage.setItem('loggedInUser', JSON.stringify(user));
-        onLoginSuccess(user); // Call the success callback passed from parent
+        onLoginSuccess(user); 
       } else {
         setError('Invalid email or password.');
       }
@@ -84,7 +78,6 @@ export default function LoginModal({ onLoginSuccess, onClose }) {
   };
 
   return (
-    // Modal Overlay (simple example, you might use a proper modal library)
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-950 border border-purple-600 rounded-xl p-6 shadow-lg max-w-sm w-full relative">
         <button
@@ -137,7 +130,7 @@ export default function LoginModal({ onLoginSuccess, onClose }) {
               required
             />
           </div>
-          {isSignUp && ( // Confirm Password field only for Sign Up
+          {isSignUp && ( 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1">Confirm Password</label>
               <input

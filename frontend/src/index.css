@@ -9,12 +9,33 @@ html, body, #root {
 }
 
 body {
-  background-image: linear-gradient(to bottom right, #000000, #8B5CF6, #4C1D95);
-  background-attachment: scroll;
+  background-color: linear-gradient(to bottom right, #000000, #8B5CF6, #4C1D95);
+  background-attachment: fixed;
+  background-size: cover;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
-  flex-direction: column; /* Stacks content vertically */
+  flex-direction: column;
 }
+
+.fade-in-out {
+  animation: fadeInOut 4s infinite; 
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(10px); 
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+

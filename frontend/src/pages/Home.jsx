@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import LoginModal from './login'; // Assuming login.jsx is login.jsx
-import ProfileSidePanel from './ProfileSidePanel'; 
+import LoginModal from './login'; 
+import ProfileSidePanel from './ProfileSidePanel';
 
 const Home = () => {
   console.log('Home component rendering...');
@@ -9,8 +9,8 @@ const Home = () => {
   // User/Auth States
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [showLoginForm, setShowLoginForm] = useState(false);
-  const [quizHistory, setQuizHistory] = useState([]); // New state for quiz history
-  const [showSidePanel, setShowSidePanel] = useState(false); // New state for side panel visibility
+  const [quizHistory, setQuizHistory] = useState([]); 
+  const [showSidePanel, setShowSidePanel] = useState(false); 
 
   // Quiz Setup States
   const [topic, setTopic] = useState('');
@@ -31,7 +31,6 @@ const Home = () => {
       try {
         const user = JSON.parse(storedUser);
         setLoggedInUser(user);
-        // Load quiz history for the logged-in user
         const storedHistory = localStorage.getItem(`quizHistory_${user.email}`);
         if (storedHistory) {
           setQuizHistory(JSON.parse(storedHistory));
@@ -39,12 +38,14 @@ const Home = () => {
       } catch (e) {
         console.error("Failed to parse stored user or history data from localStorage", e);
         localStorage.removeItem('loggedInUser');
-        localStorage.removeItem('quizHistory_'); // Clear any corrupted history
+        localStorage.removeItem('quizHistory_'); 
       }
     }
+    // Handle navigation state if user was redirected back from QuizPage
     if (location.state && location.state.loggedInUser) {
       const userFromState = location.state.loggedInUser;
       setLoggedInUser(userFromState);
+      // Ensure history is loaded if coming back from quiz page
       const storedHistory = localStorage.getItem(`quizHistory_${userFromState.email}`);
       if (storedHistory) {
         setQuizHistory(JSON.parse(storedHistory));
@@ -127,12 +128,12 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-023E8A via-blue-300 to-indigo-900 text-white py-9">
+    <div className="min-h-screen bg-gradient-to-br from-023E8A via-blue-300 to-indigo-900 text-white py-5">
       {/* Navbar */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-15 px-10">
         <div>
           <h2 className="text-2xl font-bold text-white">🤖 QuizBotix</h2>
-          <p className="text-sm text-yellow-50 italic">Smart Quizzing for Curious Minds</p>
+          <p className="text-sm text-yellow-50 italic fade-in-out">Smart Quizzing for Curious Minds</p>
         </div>
 
         <div className="mt-4 sm:mt-0 space-x-4">
@@ -175,7 +176,7 @@ const Home = () => {
       )}
 
       {/* Profile Side Panel */}
-      {loggedInUser && 
+      {loggedInUser && ( // Only render if a user is logged in
         <ProfileSidePanel
           isOpen={showSidePanel}
           onClose={() => setShowSidePanel(false)}
@@ -199,7 +200,7 @@ const Home = () => {
                 placeholder="Enter quiz topic"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="w-full p-3 rounded-lg bg-gray-800 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full p-3 rounded-lg bg-gray-800 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 "
               />
 
               <select
@@ -241,13 +242,44 @@ const Home = () => {
             <p className="text-gray-300 mb-6">Please log in to generate and play quizzes.</p>
             <button
               onClick={() => setShowLoginForm(true)}
-              className="bg-blue-600 hover:bg-blue-800 py-3 px-8 rounded-lg text-white font-bold text-lg transition transform hover:scale-105"
+              className="bg-blue-600 hover:bg-pink-600 py-3 px-8 rounded-lg text-white font-bold text-lg transition transform hover:scale-105"
             >
               Log In Now
             </button>
         </div>
       )}
-      
+      {/* === Features Section === */}
+<div className="mt-20 px-6 md:px-20 py-10 bg-white text-gray-900">
+  <h2 className="text-3xl font-extrabold text-center mb-10 text-blue-900">Why Choose QuizBotix?</h2>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+    
+    {/* Card 1 */}
+    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+      <h3 className="text-xl font-bold mb-2">🎯 AI-Generated Quizzes</h3>
+      <p className="text-gray-700">
+        Generate topic-based quizzes instantly using powerful Large Language Models (LLMs).
+      </p>
+    </div>
+
+    {/* Card 2 */}
+    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+      <h3 className="text-xl font-bold mb-2">⚡ Real-Time Leaderboard</h3>
+      <p className="text-gray-700">
+        Compete live with other users through our Socket.IO-powered leaderboard and see scores update instantly.
+      </p>
+    </div>
+
+    {/* Card 3 */}
+    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+      <h3 className="text-xl font-bold mb-2">📊 Personalized History</h3>
+      <p className="text-gray-700">
+        Track your quiz attempts and performance through your own saved history, unique to your account.
+      </p>
+    </div>
+
+  </div>
+</div>
+
     </div>
   );
 };

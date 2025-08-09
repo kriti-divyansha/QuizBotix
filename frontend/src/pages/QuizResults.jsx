@@ -84,7 +84,6 @@ export default function QuizResults({ results, onGenerateNewQuiz }) {
                 ))}
             </div>
 
-            {/* "Generate New Quiz" Button at the bottom */}
             <div className="mt-8 flex-shrink-0">
                 <button
                     onClick={onGenerateNewQuiz}

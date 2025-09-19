@@ -11,7 +11,11 @@ import datetime
 load_dotenv()
 app = Flask(__name__)
 
-CORS(app, supports_credentials=True)
+from flask_cors import CORS
+
+CORS(app,
+     supports_credentials=True,
+     resources={r"/*": {"origins": ["https://quiz-botix.vercel.app"]}})
 
 _secret_key = os.getenv("FLASK_SECRET_KEY")
 

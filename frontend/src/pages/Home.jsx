@@ -94,12 +94,12 @@ const Home = () => {
     setError(null);
 
     try {
-     const res = await fetch('https://quizbotix-1.onrender.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, difficulty, count }),
-        credentials: 'include'
-      });
+     const res = await fetch("https://quizbotix-1.onrender.com/generate-quiz", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({ topic, difficulty, count }),
+     credentials: "include"
+   });
 
       const data = await res.json();
       console.log('Frontend received data:', data);

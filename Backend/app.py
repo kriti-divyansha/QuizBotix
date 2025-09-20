@@ -13,9 +13,7 @@ app = Flask(__name__)
 
 from flask_cors import CORS
 
-CORS(app,
-     supports_credentials=True,
-     resources={r"/*": {"origins": ["https://quiz-botix.vercel.app"]}})
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
 _secret_key = os.getenv("FLASK_SECRET_KEY")
 

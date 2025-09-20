@@ -97,9 +97,8 @@ const Home = () => {
      const res = await fetch("https://quizbotix-1.onrender.com/generate-quiz", {
      method: "POST",
      headers: { "Content-Type": "application/json" },
-     body: JSON.stringify({ topic, difficulty, count }),
-     credentials: "include"
-   });
+     body: JSON.stringify({ topic: "java", difficulty: "easy", count: 5 }),
+     });
 
       const data = await res.json();
       console.log('Frontend received data:', data);

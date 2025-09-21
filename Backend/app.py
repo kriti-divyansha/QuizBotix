@@ -143,8 +143,12 @@ def generate_quiz():
             print("❌ No choices returned by Groq API:", groq_response_json)
             return jsonify({"error": "Groq API returned no choices"}), 500
 
-        message = choices[0].get("message") or choices[0].get("delta") or {}
-        content = message.get("content")
+        content = None
+        if "message" in choices[0]:
+         content = choices[0]["message"].get("content")
+        elif "delta" in choices[0]:
+         content = choices[0]["delta"].get("content")
+
 
         if not content:
             print("❌ No content in Groq response:", groq_response_json)

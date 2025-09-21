@@ -81,7 +81,6 @@ if not GROQ_API_KEY:
 
 @app.route('/generate-quiz', methods=['POST'])
 def generate_quiz():
-
     if 'player_id' not in session:
         session['player_id'] = str(uuid.uuid4())
         print(f"👋 New player detected. Assigned unique ID: {session['player_id']}")
@@ -114,14 +113,9 @@ def generate_quiz():
         "    \"question\": \"What is the capital of France?\",\n"
         "    \"options\": [\"A. Berlin\", \"B. Paris\", \"C. Rome\", \"D. Madrid\"],\n"
         "    \"answer\": \"B\"\n"
-        "  },\n"
-        "  {\n"
-        "    \"question\": \"Which planet is known as the Red Planet?\",\n"
-        "    \"options\": [\"A. Earth\", \"B. Mars\", \"C. Jupiter\", \"D. Venus\"],\n"
-        "    \"answer\": \"B\"\n"
         "  }\n"
         "]\n"
-        "Note: Ensure the response is pure JSON, without any preceding or trailing text like markdown code blocks (```json) or conversational phrases."
+        "Note: Ensure the response is pure JSON, without any extra text or markdown."
     )
 
     headers = {
@@ -130,7 +124,7 @@ def generate_quiz():
     }
 
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.3-70b-versatile",   # ✅ use a supported model
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
         "max_tokens": 2000
@@ -142,21 +136,43 @@ def generate_quiz():
         response.raise_for_status()
 
         groq_response_json = response.json()
-        content = groq_response_json["choices"][0]["message"]["content"]
+
+        # ✅ Safe extraction to avoid recursion bug
+        choices = groq_response_json.get("choices", [])
+        if not choices:
+            print("❌ No choices returned by Groq API:", groq_response_json)
+            return jsonify({"error": "Groq API returned no choices"}), 500
+
+        message = choices[0].get("message") or choices[0].get("delta") or {}
+        content = message.get("content")
+
+        if not content:
+            print("❌ No content in Groq response:", groq_response_json)
+            return jsonify({"error": "Groq API returned no content"}), 500
 
         print("🧠 Raw Groq response content (before JSON parsing):")
         print(content)
 
         if content.startswith("```json") and content.endswith("```"):
             content = content[7:-3].strip()
-            print("Cleaned markdown from Groq response.")
+            print("✅ Cleaned markdown from Groq response.")
 
-        questions_raw = json.loads(content)
+        # ✅ Protect JSON parsing
+        try:
+            questions_raw = json.loads(content)
+        except Exception as e:
+            print(f"❌ Failed to parse Groq response as JSON: {e}")
+            print("Content received:\n", content)
+            return jsonify({"error": "Groq response not valid JSON"}), 500
 
-        if not isinstance(questions_raw, list) or not all(isinstance(q, dict) and 'question' in q and 'options' in q and 'answer' in q for q in questions_raw):
-            print("⚠️ Warning: Groq response was JSON, but didn't match expected quiz structure.")
+        if not isinstance(questions_raw, list) or not all(
+            isinstance(q, dict) and 'question' in q and 'options' in q and 'answer' in q 
+            for q in questions_raw
+        ):
+            print("⚠️ Warning: Groq response didn't match expected quiz structure.")
             return jsonify({"error": "AI generated response in unexpected format"}), 500
 
+        # ✅ Transform into frontend + server store formats
         full_questions_for_server_store = []
         questions_for_frontend = []
 
@@ -183,7 +199,6 @@ def generate_quiz():
             })
 
         quiz_id = str(uuid.uuid4())
-
         server_side_quiz_store[quiz_id] = {
             "questions": full_questions_for_server_store,
             "topic": topic,
@@ -195,9 +210,6 @@ def generate_quiz():
             session['active_quizzes'] = {}
         session['active_quizzes'][quiz_id] = {"topic": topic}
         session.modified = True
-
-        print(f"📝 Minimal quiz info stored in session['active_quizzes']['{quiz_id}']")
-        print(f"DEBUG: Session content after adding quiz: {session.get('active_quizzes')}")
 
         response_data_to_send = {"quiz_id": quiz_id, "questions": questions_for_frontend}
         print("💡 Flask sending this JSON data to frontend:", json.dumps(response_data_to_send, indent=2))
@@ -215,20 +227,14 @@ def generate_quiz():
             print(f"❌ Groq API HTTP Error ({status_code} {reason}): {error_details}")
             print(f"Groq Raw Error Response Body: {e.response.text}")
         except json.JSONDecodeError:
-            print(f"❌ Groq API HTTP Error ({status_code} {reason}): Non-JSON error response from Groq.")
+            print(f"❌ Groq API HTTP Error ({status_code} {reason}): Non-JSON error response.")
             print(f"Groq Raw Error Response Body: {e.response.text}")
 
         return jsonify({"error": "Failed to communicate with AI service", "details": error_details}), 500
 
-    except json.JSONDecodeError as e:
-        print(f"❌ Error parsing Groq response as JSON: {e}")
-        print(f"Content that caused JSON error:\n{content}")
-        return jsonify({"error": "AI response was not valid JSON. Please try again or refine the prompt."}), 500
-
     except Exception as e:
         print(f"❌ An unexpected server error occurred: {str(e)}")
         return jsonify({"error": "An unexpected server error occurred"}), 500
-
 
 @app.route('/submit-quiz', methods=['POST'])
 def submit_quiz():

@@ -1,7 +1,106 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import LoginModal from './login'; 
-import ProfileSidePanel from './ProfileSidePanel';
+
+// FIX: Integrated LoginModal component to make the app self-contained.
+const LoginModal = ({ onLoginSuccess, onClose }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return;
+    }
+    setError(null);
+    // Simulate a successful login
+    const user = { email: email.toLowerCase(), name: 'QuizPlayer' };
+    localStorage.setItem('loggedInUser', JSON.stringify(user));
+    onLoginSuccess(user);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl font-bold transition">
+          &times;
+        </button>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4 text-center">Login</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-800 transition py-3 rounded-lg text-white font-semibold"
+          >
+            Log In
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// FIX: Integrated ProfileSidePanel component to make the app self-contained.
+const ProfileSidePanel = ({ isOpen, onClose, user, quizHistory }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-40">
+      <div onClick={onClose} className="absolute inset-0 bg-black bg-opacity-50"></div>
+      <div className="fixed top-0 right-0 h-full w-80 bg-gray-900 text-white shadow-lg transform transition-transform duration-300 ease-in-out">
+        <div className="flex justify-between items-center p-6 border-b border-gray-700">
+          <h2 className="text-2xl font-bold">Profile</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-3xl font-bold">
+            &times;
+          </button>
+        </div>
+        <div className="p-6">
+          {user && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-indigo-300">Welcome, {user.name || 'Guest'}!</h3>
+              <p className="text-sm text-gray-400">{user.email}</p>
+            </div>
+          )}
+          <div>
+            <h3 className="text-xl font-semibold mb-4 border-b pb-2 border-gray-700 text-indigo-300">Quiz History</h3>
+            {quizHistory.length > 0 ? (
+              <ul className="space-y-4">
+                {quizHistory.map((quiz, index) => (
+                  <li key={index} className="bg-gray-800 p-4 rounded-lg shadow-inner flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-lg">{quiz.topic}</p>
+                      <p className="text-sm text-gray-400">Score: {quiz.score}/{quiz.totalQuestions}</p>
+                    </div>
+                    <span className={`text-sm font-semibold px-2 py-1 rounded-full ${quiz.score / quiz.totalQuestions > 0.7 ? 'bg-green-600' : 'bg-red-600'}`}>
+                      {Math.round((quiz.score / quiz.totalQuestions) * 100)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-400 italic">No quiz history found. Play a quiz to see your history here!</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Home = () => {
   console.log('Home component rendering...');
@@ -9,8 +108,8 @@ const Home = () => {
   // User/Auth States
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [showLoginForm, setShowLoginForm] = useState(false);
-  const [quizHistory, setQuizHistory] = useState([]); 
-  const [showSidePanel, setShowSidePanel] = useState(false); 
+  const [quizHistory, setQuizHistory] = useState([]);
+  const [showSidePanel, setShowSidePanel] = useState(false);
 
   // Quiz Setup States
   const [topic, setTopic] = useState('');
@@ -38,7 +137,7 @@ const Home = () => {
       } catch (e) {
         console.error("Failed to parse stored user or history data from localStorage", e);
         localStorage.removeItem('loggedInUser');
-        localStorage.removeItem('quizHistory_'); 
+        localStorage.removeItem('quizHistory_');
       }
     }
     // Handle navigation state if user was redirected back from QuizPage
@@ -94,25 +193,28 @@ const Home = () => {
     setError(null);
 
     try {
-     const res = await fetch("https://quizbotix-1.onrender.com/generate-quiz", {
-     method: "POST",
-     headers: { "Content-Type": "application/json" },
-     body: JSON.stringify({ topic: "java", difficulty: "easy", count: 5 }),
-     });
+      const res = await fetch("https://quizbotix-1.onrender.com/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Use the state variables for the request body
+        body: JSON.stringify({ topic, difficulty, count }),
+        // 🔑 FIX: Add 'credentials: "include"' to send the session cookie
+        credentials: 'include',
+      });
 
       const data = await res.json();
       console.log('Frontend received data:', data);
 
       if (res.ok && data.questions && data.quiz_id) {
         navigate('/quiz', {
-            state: {
-              questions: data.questions,
-              quizId: data.quiz_id,
-              loggedInUser: loggedInUser,
-              topic: topic,
-              difficulty: difficulty,
-              count: count
-            }
+          state: {
+            questions: data.questions,
+            quizId: data.quiz_id,
+            loggedInUser: loggedInUser,
+            topic: topic,
+            difficulty: difficulty,
+            count: count
+          }
         });
 
       } else {
@@ -152,7 +254,7 @@ const Home = () => {
                 onClick={handleLogout}
                 className="bg-blue-900 hover:bg-pink-700 py-2 px-2 rounded-lg text-white font-medium transition"
               >
-                Logout 
+                Logout
               </button>
             </>
           ) : (
@@ -237,48 +339,45 @@ const Home = () => {
       ) : (
         // If not logged in, show a friendly message prompting login
         <div className="text-center mt-12 p-6 rounded-lg bg-gray-900 max-w-md mx-auto shadow-xl">
-            <p className="text-xl font-semibold text-indigo-200 mb-4">Welcome to QuizBotix!</p>
-            <p className="text-gray-300 mb-6">Please log in to generate and play quizzes.</p>
-            <button
-              onClick={() => setShowLoginForm(true)}
-              className="bg-blue-600 hover:bg-pink-600 py-3 px-8 rounded-lg text-white font-bold text-lg transition transform hover:scale-105"
-            >
-              Log In Now
-            </button>
+          <p className="text-xl font-semibold text-indigo-200 mb-4">Welcome to QuizBotix!</p>
+          <p className="text-gray-300 mb-6">Please log in to generate and play quizzes.</p>
+          <button
+            onClick={() => setShowLoginForm(true)}
+            className="bg-blue-600 hover:bg-pink-600 py-3 px-8 rounded-lg text-white font-bold text-lg transition transform hover:scale-105"
+          >
+            Log In Now
+          </button>
         </div>
       )}
       {/* === Features Section === */}
-<div className="mt-20 px-6 md:px-20 py-10 bg-white text-gray-900">
-  <h2 className="text-3xl font-extrabold text-center mb-10 text-blue-900">Why Choose QuizBotix?</h2>
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-    
-    {/* Card 1 */}
-    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
-      <h3 className="text-xl font-bold mb-2">🎯 AI-Generated Quizzes</h3>
-      <p className="text-gray-700">
-        Generate topic-based quizzes instantly using powerful Large Language Models (LLMs).
-      </p>
-    </div>
+      <div className="mt-20 px-6 md:px-20 py-10 bg-white text-gray-900">
+        <h2 className="text-3xl font-extrabold text-center mb-10 text-blue-900">Why Choose QuizBotix?</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Card 1 */}
+          <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+            <h3 className="text-xl font-bold mb-2">🎯 AI-Generated Quizzes</h3>
+            <p className="text-gray-700">
+              Generate topic-based quizzes instantly using powerful Large Language Models (LLMs).
+            </p>
+          </div>
 
-    {/* Card 2 */}
-    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
-      <h3 className="text-xl font-bold mb-2">⚡ Real-Time Leaderboard</h3>
-      <p className="text-gray-700">
-        Compete live with other users through our Socket.IO-powered leaderboard and see scores update instantly.
-      </p>
-    </div>
+          {/* Card 2 */}
+          <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+            <h3 className="text-xl font-bold mb-2">⚡ Real-Time Leaderboard</h3>
+            <p className="text-gray-700">
+              Compete live with other users through our Socket.IO-powered leaderboard and see scores update instantly.
+            </p>
+          </div>
 
-    {/* Card 3 */}
-    <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
-      <h3 className="text-xl font-bold mb-2">📊 Personalized History</h3>
-      <p className="text-gray-700">
-        Track your quiz attempts and performance through your own saved history, unique to your account.
-      </p>
-    </div>
-
-  </div>
-</div>
-
+          {/* Card 3 */}
+          <div className="bg-indigo-100 p-6 rounded-2xl shadow-lg hover:shadow-indigo-400 transition-all">
+            <h3 className="text-xl font-bold mb-2">📊 Personalized History</h3>
+            <p className="text-gray-700">
+              Track your quiz attempts and performance through your own saved history, unique to your account.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

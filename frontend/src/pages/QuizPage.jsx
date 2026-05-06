@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import QuizQuestions from './QuizQuestions';
 import QuizResults from './QuizResults';
+import API_BASE_URL from '../config';
 
 const QuizPage = () => {
     const location = useLocation();
@@ -72,7 +73,7 @@ const QuizPage = () => {
         setError(null);
 
         try {
-            const res = await fetch('http://localhost:5000/submit-quiz', {
+            const res = await fetch(`${API_BASE_URL}/submit-quiz`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

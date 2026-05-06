@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import LoginModal from './login'; 
 import ProfileSidePanel from './ProfileSidePanel';
+import API_BASE_URL from '../config';
 
 const Home = () => {
     // === 1. State Management ===
@@ -98,7 +99,7 @@ const Home = () => {
 
         try {
             // NOTE: This call relies on your backend server running on port 5000
-            const res = await fetch('http://localhost:5000/generate-quiz', {
+            const res = await fetch(`${API_BASE_URL}/generate-quiz`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ topic, difficulty, count }),

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import QuizQuestions from './QuizQuestions';
 import QuizResults from './QuizResults';
+import API_BASE_URL from '../config';
 
 // const socket = io('http://localhost:5000'); // Connect to your backend socket
 

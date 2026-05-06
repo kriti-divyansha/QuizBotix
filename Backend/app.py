@@ -1,7 +1,7 @@
 from gevent import monkey
 monkey.patch_all()
 
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room
 import requests
@@ -15,43 +15,23 @@ import re
 load_dotenv()
 app = Flask(__name__)
 
-# ✅ FIX 1: SameSite must be 'None' (not 'Lax') for cross-site cookies
-# Vercel frontend + Render backend = two different domains = cross-site
-# Browsers block cookies with SameSite=Lax across different domains
 FRONTEND_URLS = [
     "https://quiz-botix-kritis-projects-208ee7c8.vercel.app",
     "https://quiz-botix.vercel.app",
-    "http://localhost:5173",  # Local dev (Vite default port)
-    "http://localhost:3000",  # Local dev (CRA default port)
+    "http://localhost:5173",
+    "http://localhost:3000",
 ]
 
-CORS(app,
-     supports_credentials=True,
-     origins=FRONTEND_URLS)  # ✅ FIX 2: Specify exact origins, not wildcard
-                              # Wildcard '*' + credentials=True is rejected by browsers
+CORS(app, supports_credentials=True, origins=FRONTEND_URLS)
 
-_secret_key = os.getenv("FLASK_SECRET_KEY")
-if not _secret_key:
-    print("❌ ERROR: FLASK_SECRET_KEY not set in environment variables!")
-    app.secret_key = 'a_fallback_dev_key_DO_NOT_USE_IN_PROD'
-else:
-    app.secret_key = _secret_key
-
-print(f"🔑 Secret key loaded: '{app.secret_key[:5]}...'")
-
-# ✅ FIX 3: SameSite='None' is required for cross-site cookie to work
-# Without this, the session cookie from /generate-quiz is never sent
-# back by the browser on the /submit-quiz call → "No player session found"
-app.config['SESSION_COOKIE_SECURE'] = True      # Required when SameSite=None
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # ✅ Was 'Lax' — this was the bug
-app.config['SESSION_PERMANENT'] = False
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_dev_key")
 
 socketio = SocketIO(app,
-                    cors_allowed_origins=FRONTEND_URLS,  # ✅ FIX 4: Match CORS origins
+                    cors_allowed_origins=FRONTEND_URLS,
                     logger=False,
                     engineio_logger=False)
 
+# In-memory stores (cleared on server restart)
 global_leaderboard_players = {}
 server_side_quiz_store = {}
 
@@ -72,7 +52,6 @@ def get_sorted_leaderboard_for_frontend():
 
 
 def strip_markdown_fences(text):
-    """Robustly strip ```json ... ``` fences from Groq responses."""
     text = text.strip()
     text = re.sub(r'^```(?:json)?\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
@@ -103,15 +82,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 if not GROQ_API_KEY:
-    print("❌ ERROR: GROQ_API_KEY not set in environment variables!")
+    print("❌ ERROR: GROQ_API_KEY not set!")
 
 
 @app.route('/generate-quiz', methods=['POST'])
 def generate_quiz():
-    if 'player_id' not in session:
-        session['player_id'] = str(uuid.uuid4())
-        print(f"👋 New player. Assigned ID: {session['player_id']}")
-
     data = request.get_json()
     topic = data.get('topic', 'General Knowledge')
     num_questions = data.get('count', 5)
@@ -174,22 +149,20 @@ def generate_quiz():
         )
 
         if not content:
-            print("❌ No content in Groq response:", groq_response_json)
+            print("❌ No content in Groq response")
             return jsonify({"error": "Groq API returned no content"}), 500
 
         print("🧠 Raw Groq response:")
         print(content)
 
-        # ✅ Robust markdown stripping (handles \n variations)
         content = strip_markdown_fences(content)
-
         questions_raw = json.loads(content)
 
         if not isinstance(questions_raw, list) or not all(
             isinstance(q, dict) and 'question' in q and 'options' in q and 'answer' in q
             for q in questions_raw
         ):
-            print("⚠️ Groq response JSON doesn't match expected quiz structure.")
+            print("⚠️ Unexpected quiz structure from Groq.")
             return jsonify({"error": "AI generated response in unexpected format"}), 500
 
         full_questions_for_server_store = []
@@ -217,20 +190,17 @@ def generate_quiz():
             })
 
         quiz_id = str(uuid.uuid4())
+
+        # ✅ Store quiz with just quiz_id — no session needed
         server_side_quiz_store[quiz_id] = {
             "questions": full_questions_for_server_store,
             "topic": topic,
             "generated_at": datetime.datetime.now(),
         }
         print(f"📝 Quiz stored: id='{quiz_id}', topic='{topic}'")
+        print(f"📦 Total quizzes in store: {len(server_side_quiz_store)}")
 
-        if 'active_quizzes' not in session:
-            session['active_quizzes'] = {}
-        session['active_quizzes'][quiz_id] = {"topic": topic}
-        session.modified = True
-
-        response_data = {"quiz_id": quiz_id, "questions": questions_for_frontend}
-        return jsonify(response_data)
+        return jsonify({"quiz_id": quiz_id, "questions": questions_for_frontend})
 
     except requests.exceptions.HTTPError as e:
         status_code = e.response.status_code
@@ -260,27 +230,16 @@ def submit_quiz():
     user_answers_list = data.get('user_answers', [])
     username = data.get('username', 'Anonymous')
 
-    if 'player_id' not in session:
-        print("❌ Submit error: No player_id in session.")
-        return jsonify({"error": "No player session found. Please generate a new quiz to start."}), 400
-
-    player_id = session['player_id']
-
     if not quiz_id:
         return jsonify({"error": "Quiz ID missing"}), 400
 
-    if 'active_quizzes' not in session or quiz_id not in session['active_quizzes']:
-        print(f"❌ Quiz ID '{quiz_id}' not in session.")
-        return jsonify({"error": "Quiz session reference not found. Please generate a new quiz."}), 404
-
+    # ✅ No session check — just look up quiz_id directly in the store
     stored_quiz_data = server_side_quiz_store.get(quiz_id)
     print(f"🔍 Quiz lookup '{quiz_id}': Found = {stored_quiz_data is not None}")
+    print(f"📦 Total quizzes in store: {len(server_side_quiz_store)}")
 
     if not stored_quiz_data or "questions" not in stored_quiz_data:
-        print("❌ Quiz not in server store — may have expired or server restarted.")
-        if 'active_quizzes' in session and quiz_id in session['active_quizzes']:
-            del session['active_quizzes'][quiz_id]
-            session.modified = True
+        print("❌ Quiz not found in store — may have expired or server restarted.")
         return jsonify({"error": "Quiz not found or expired. Please generate a new quiz."}), 404
 
     stored_questions = stored_quiz_data["questions"]
@@ -305,7 +264,9 @@ def submit_quiz():
                 all_options.get(user_selected_letter.upper(), "Not answered")
                 if user_selected_letter else "Not answered"
             )
-            correct_answer_text = all_options.get(correct_answer_letter.upper(), f"Option {correct_answer_letter}")
+            correct_answer_text = all_options.get(
+                correct_answer_letter.upper(), f"Option {correct_answer_letter}"
+            )
 
             is_correct = (
                 user_selected_letter is not None and
@@ -327,10 +288,16 @@ def submit_quiz():
             })
         else:
             print(f"⚠️ Question index {q_index} out of bounds.")
-            results_for_frontend.append({"error": "Question index out of bounds", "question_index": q_index})
+            results_for_frontend.append({
+                "error": "Question index out of bounds",
+                "question_index": q_index
+            })
 
     total_questions = len(stored_questions)
-    print(f"✅ Quiz submitted. Player '{player_id}' ({username}). Score: {score}/{total_questions}")
+
+    # ✅ Use username + short quiz_id as unique player key (no session needed)
+    player_id = f"{username}_{quiz_id[:8]}"
+    print(f"✅ Quiz submitted. Player '{player_id}'. Score: {score}/{total_questions}")
 
     global_leaderboard_players[player_id] = {
         "username": username,
@@ -340,16 +307,13 @@ def submit_quiz():
         "timestamp": datetime.datetime.now().isoformat(),
     }
 
-    # ✅ FIX 5: Broadcast to ALL clients, not hardcoded room 'quiz123'
+    # Broadcast updated leaderboard to all connected clients
     socketio.emit('updateLeaderboard', get_sorted_leaderboard_for_frontend())
 
+    # Cleanup quiz from store after submission
     if quiz_id in server_side_quiz_store:
         del server_side_quiz_store[quiz_id]
         print(f"🗑️ Quiz {quiz_id} removed from store.")
-
-    if 'active_quizzes' in session and quiz_id in session['active_quizzes']:
-        del session['active_quizzes'][quiz_id]
-        session.modified = True
 
     return jsonify({
         "score": score,

@@ -17,6 +17,7 @@ app = Flask(__name__)
 
 FRONTEND_URLS = [
     "https://quiz-botix-kritis-projects-208ee7c8.vercel.app",
+    "https://quiz-botix-4fwoo29o5-kritis-projects-208ee7c8.vercel.app", 
     "https://quiz-botix.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
